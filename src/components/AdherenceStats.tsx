@@ -33,22 +33,35 @@ export const AdherenceStats: React.FC<AdherenceStatsProps> = ({
   // Dynamic feedback quote based on completion
   const getMotivationalQuote = (pct: number) => {
     if (pct === 0) return 'El primer paso es el más importante. ¡Comienza hoy sin prisa y con buena técnica!';
-    if (pct < 50) return '¡Gran comienzo! Recuerda mantener el control en cada repetición para una contracción muscular perfecta.';
+    if (pct < 50) return '¡Gran comienzo! Mantén el control en cada repetición para una contracción muscular perfecta.';
     if (pct < 100) return '¡Falta poco para completar tu rutina con técnica impecable!';
-    return '¡Espectacular! Rutina completada al 100% con técnica excelente. ¡Tu cuerpo te lo agradecerá!';
+    return '¡Espectacular! Rutina completada al 100% con técnica excelente.';
   };
 
   return (
-    <div className="glass rounded-3xl p-5 shadow-2xl relative overflow-hidden" id="adherence-stats-panel">
+    <div className="glass rounded-3xl p-4 sm:p-5 shadow-xl relative border border-brand-yellow/10" id="adherence-stats-panel">
       {/* Absolute decorative glow background */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-brand-yellow/5 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="grid grid-cols-12 gap-4 relative z-10">
+      {/* Top Header Row: Level Label + Badge Title + Award Pill */}
+      <div className="flex justify-between items-center pb-3 border-b border-white/5 relative z-10">
+        <div className="min-w-0">
+          <span className="text-[10px] text-gray-400 font-display font-bold uppercase tracking-wider block">Nivel de Adherencia</span>
+          <h3 className={`text-sm font-display font-black ${badge.color} mt-0.5 truncate`}>{badge.title}</h3>
+        </div>
+        <div className="flex items-center gap-1.5 bg-brand-yellow/10 border border-brand-yellow/20 px-3 py-1.5 rounded-2xl shrink-0">
+          <Award className="w-4 h-4 text-brand-yellow" />
+          <span className="text-xs font-display font-black text-brand-yellow">{percentage}%</span>
+        </div>
+      </div>
+
+      {/* Middle Row: Progress Circle & Stacked Stat Cards */}
+      <div className="grid grid-cols-12 gap-3 items-center pt-3 relative z-10">
         {/* Progress Circle & Completion */}
         <div className="col-span-5 flex flex-col items-center justify-center border-r border-white/5 pr-2">
-          <div className="relative w-24 h-24 flex items-center justify-center">
+          <div className="relative w-20 h-20 flex items-center justify-center">
             {/* Background Circle */}
-            <svg className="absolute w-full h-full transform -rotate-90">
+            <svg viewBox="0 0 96 96" className="w-full h-full transform -rotate-90">
               <circle
                 cx="48"
                 cy="48"
@@ -68,67 +81,50 @@ export const AdherenceStats: React.FC<AdherenceStatsProps> = ({
               />
             </svg>
             <div className="text-center z-10">
-              <span className="text-2xl font-display font-black text-white tracking-tight">{percentage}%</span>
-              <p className="text-[10px] text-brand-yellow font-display font-bold uppercase tracking-wider">Progreso</p>
+              <span className="text-lg font-display font-black text-white">{percentage}%</span>
             </div>
           </div>
-          <p className="text-xs text-neutral-400 mt-2.5 font-medium">
+          <p className="text-[10px] text-gray-400 mt-1 font-medium text-center whitespace-nowrap">
             {completedCount} de {totalCount} listos
           </p>
         </div>
 
-        {/* Core Adherence Metrics */}
-        <div className="col-span-7 flex flex-col justify-between pl-1">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-semibold font-display">Nivel de Adherencia</p>
-              <h4 className={`text-sm ${badge.color} font-display mt-0.5 font-bold`}>{badge.title}</h4>
+        {/* Core Adherence Metrics Stacked */}
+        <div className="col-span-7 flex flex-col gap-2 pl-1">
+          {/* Streak card */}
+          <div className="bg-brand-dark/60 border border-white/5 rounded-xl p-2 flex items-center gap-2.5 min-w-0">
+            <div className="bg-brand-yellow/10 p-1.5 rounded-lg shrink-0">
+              <Flame className="w-3.5 h-3.5 text-brand-yellow fill-brand-yellow/30" />
             </div>
-            <div className="bg-[#FFC800]/10 border border-[#FFC800]/20 p-1.5 rounded-xl">
-              <Award className="w-4 h-4 text-brand-yellow" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] text-gray-500 font-display font-bold uppercase tracking-wider leading-tight">Racha actual</p>
+              <p className="text-xs font-display font-black text-white leading-tight truncate">
+                {stats.streak} {stats.streak === 1 ? 'Día' : 'Días'}
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            {/* Streak card */}
-            <div className="bg-[#1e1e1e] border border-white/5 rounded-xl p-2 flex items-center gap-2">
-              <div className="bg-brand-yellow/10 p-1.5 rounded-lg">
-                <Flame className="w-4 h-4 text-brand-yellow fill-brand-yellow/30" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] text-neutral-500 font-display font-bold leading-tight">Racha</p>
-                <p className="text-xs font-black text-white leading-tight font-display truncate">
-                  {stats.streak} {stats.streak === 1 ? 'Día' : 'Días'}
-                </p>
-              </div>
+          {/* Total sessions card */}
+          <div className="bg-brand-dark/60 border border-white/5 rounded-xl p-2 flex items-center gap-2.5 min-w-0">
+            <div className="bg-emerald-500/10 p-1.5 rounded-lg shrink-0">
+              <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
             </div>
-
-            {/* Total sessions card */}
-            <div className="bg-[#1e1e1e] border border-white/5 rounded-xl p-2 flex items-center gap-2">
-              <div className="bg-emerald-500/10 p-1.5 rounded-lg">
-                <Dumbbell className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] text-neutral-500 font-display font-bold leading-tight">Sesiones</p>
-                <p className="text-xs font-black text-white leading-tight font-display truncate">
-                  {stats.totalWorkouts} total
-                </p>
-              </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] text-gray-500 font-display font-bold uppercase tracking-wider leading-tight">Sesiones completadas</p>
+              <p className="text-xs font-display font-black text-white leading-tight truncate">
+                {stats.totalWorkouts} total
+              </p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Motivational message banner */}
-      <div className="mt-4 pt-3 border-t border-white/5 flex gap-2.5 items-start relative z-10">
-        <div className="bg-brand-yellow/10 p-1.5 rounded-lg mt-0.5 shrink-0">
-          <TrendingUp className="w-4 h-4 text-brand-yellow" />
-        </div>
-        <div>
-          <p className="text-xs text-neutral-300 font-medium leading-relaxed italic">
-            {getMotivationalQuote(percentage)}
-          </p>
-        </div>
+      <div className="mt-3 pt-2.5 border-t border-white/5 flex gap-2 items-start relative z-10">
+        <TrendingUp className="w-3.5 h-3.5 text-brand-yellow shrink-0 mt-0.5" />
+        <p className="text-[11px] text-gray-300 font-medium leading-relaxed italic">
+          {getMotivationalQuote(percentage)}
+        </p>
       </div>
     </div>
   );

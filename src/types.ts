@@ -24,3 +24,12 @@ export interface UserStats {
   totalWorkouts: number;
   lastWorkoutDate: string | null;
 }
+
+// ── AI Coach Chat ────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'coach';
+  text: string;
+  isStreaming?: boolean;
+}

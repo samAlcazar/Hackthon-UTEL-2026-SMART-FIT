@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   X, 
   Volume2, 
@@ -16,10 +16,47 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Flame
+  Flame,
+  Bot,
+  Send,
+  RotateCcw,
 } from 'lucide-react';
-import { Exercise } from '../types';
+import { GoogleGenAI } from '@google/genai';
+import { Exercise, ChatMessage } from '../types';
 import { getMotivationalPhrase } from '../data/motivational';
+
+// ── Fallback answers when no API key is configured ──────────────────────────
+
+const FALLBACK_ANSWERS: Record<string, string> = {
+  forma: 'Para saber si tienes buena forma, concéntrate en dos cosas: control del movimiento (sin rebotes ni impulsos) y que el músculo objetivo sea el que "tira" del peso, no la inercia. Si sientes el músculo principal quemarse, vas bien.',
+  musculo: 'El truco es la "conexión mente-músculo": antes de empezar la serie, toca con tu mano el músculo que vas a trabajar y visualiza que se contrae. Durante el movimiento, haz la fase de contracción (subida o empuje) más lenta de lo normal.',
+  alternativa: '¡Claro! Puedes sustituir este ejercicio por uno de peso corporal o con mancuernas que trabaje el mismo grupo muscular. Si tienes molestia en alguna articulación, lo mejor es avisarle a tu coach para ajustar la rutina sin riesgo.',
+  descanso: 'Para hipertrofia (ganar músculo) lo ideal es descansar entre 60 y 90 segundos entre series. Si el objetivo es fuerza máxima, puedes extender el descanso a 2-3 minutos. Para resistencia muscular, con 30-45 segundos es suficiente.',
+  peso: 'Una buena regla es el "test de las últimas 2 reps": si puedes hacer las últimas 2 repeticiones de la serie con buena técnica pero con esfuerzo, el peso es el correcto. Si las últimas reps se sienten muy fáciles, sube el peso.',
+  lesion: 'Si tienes dolor agudo durante el ejercicio, para inmediatamente. Un poco de "ardor" muscular es normal, pero el dolor articular no lo es. Consulta con tu coach antes de continuar — siempre es mejor prevenir.',
+  default: 'Excelente pregunta. Mi recomendación principal para este ejercicio es enfocarte en la técnica antes que en el peso: controla la velocidad del movimiento, respira correctamente (exhala en el esfuerzo) y escucha a tu cuerpo. ¿Quieres que profundice en algún aspecto específico?',
+};
+
+function getFallbackAnswer(question: string, exerciseName: string): string {
+  const q = question.toLowerCase();
+  if (q.includes('form') || q.includes('bien') || q.includes('correcto') || q.includes('técnica')) return FALLBACK_ANSWERS.forma;
+  if (q.includes('músculo') || q.includes('musculo') || q.includes('sentir') || q.includes('activa')) return FALLBACK_ANSWERS.musculo;
+  if (q.includes('alternativa') || q.includes('sustituir') || q.includes('reemplazar')) return FALLBACK_ANSWERS.alternativa;
+  if (q.includes('descanso') || q.includes('descansar') || q.includes('pausa')) return FALLBACK_ANSWERS.descanso;
+  if (q.includes('peso') || q.includes('cuánto') || q.includes('cuanto') || q.includes('kg')) return FALLBACK_ANSWERS.peso;
+  if (q.includes('duele') || q.includes('dolor') || q.includes('lesion') || q.includes('lesión')) return FALLBACK_ANSWERS.lesion;
+  return FALLBACK_ANSWERS.default;
+}
+
+// ── Quick question suggestions ───────────────────────────────────────────────
+
+const QUICK_QUESTIONS = [
+  '¿Cómo sé si lo estoy haciendo bien?',
+  '¿Qué músculo debo sentir activarse?',
+  '¿Cuánto descanso entre series?',
+  '¿Cómo elijo el peso correcto?',
+  '¿Hay alguna alternativa si me duele?',
+];
 
 export interface SetItem {
   setNumber: number;
@@ -52,9 +89,15 @@ export const ExerciseDetail: React.FC<ExerciseDetailProps> = ({
   totalExercises = 1,
 }) => {
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'video' | 'anatomy'>('video');
+  const [activeTab, setActiveTab] = useState<'video' | 'anatomy' | 'coach'>('video');
   const [scanPulse, setScanPulse] = useState<boolean>(true);
   const [setsData, setSetsData] = useState<SetItem[]>([]);
+
+  // ── AI Coach state ────────────────────────────────────────────────────────
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAskingCoach, setIsAskingCoach] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Load sets data from localStorage when exercise.id changes
   useEffect(() => {
@@ -243,6 +286,9 @@ export const ExerciseDetail: React.FC<ExerciseDetailProps> = ({
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
+    // Also reset chat when exercise changes
+    setChatMessages([]);
+    setChatInput('');
   }, [exercise.id]);
 
   // Periodic visual scanner animation for the anatomy diagram
@@ -252,6 +298,88 @@ export const ExerciseDetail: React.FC<ExerciseDetailProps> = ({
     }, 2000);
     return () => clearInterval(timer);
   }, []);
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  // ── AI Coach handler ───────────────────────────────────────────────────────
+  const handleAskCoach = useCallback(async (question: string) => {
+    if (!question.trim() || isAskingCoach) return;
+
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      text: question.trim(),
+    };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setIsAskingCoach(true);
+
+    const coachMsgId = `coach-${Date.now()}`;
+    setChatMessages(prev => [...prev, { id: coachMsgId, role: 'coach', text: '', isStreaming: true }]);
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+
+    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+      // Fallback: simulate a short delay then show pre-built answer
+      await new Promise(r => setTimeout(r, 800));
+      const answer = getFallbackAnswer(question, exercise.name);
+      setChatMessages(prev =>
+        prev.map(m => m.id === coachMsgId ? { ...m, text: answer, isStreaming: false } : m)
+      );
+      setIsAskingCoach(false);
+      return;
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+
+      const systemPrompt = `Eres el Coach IA de SmartFit, un asistente de entrenamiento personal integrado en la app del gimnasio. 
+Tu rol es responder preguntas sobre ejercicios de forma clara, precisa y motivadora.
+
+Contexto del ejercicio actual:
+- Nombre: ${exercise.name}
+- Músculo principal: ${exercise.targetMuscles.join(', ')}
+- Músculos secundarios: ${exercise.secondaryMuscles.join(', ')}
+- Parte del cuerpo: ${exercise.bodyParts.join(', ')}
+- Equipamiento: ${exercise.equipment.join(', ')}
+- Instrucciones: ${exercise.instructions.map((s, i) => `${i + 1}. ${s.replace(/^Step:\s*\d+\s*/i, '')}`).join(' ')}
+
+Reglas de respuesta:
+- Máximo 3 oraciones directas y prácticas
+- Tono de coach cercano, en español latinoamericano
+- No uses markdown, listas ni emojis en exceso
+- Si la pregunta no tiene que ver con el ejercicio, redirige amablemente
+- Nunca juzgues al usuario, siempre motiva`;
+
+      const response = await ai.models.generateContentStream({
+        model: 'gemini-2.0-flash',
+        contents: `${systemPrompt}\n\nPregunta del usuario: ${question}`,
+      });
+
+      let fullText = '';
+      for await (const chunk of response) {
+        const chunkText = chunk.text ?? '';
+        fullText += chunkText;
+        setChatMessages(prev =>
+          prev.map(m => m.id === coachMsgId ? { ...m, text: fullText, isStreaming: true } : m)
+        );
+      }
+
+      setChatMessages(prev =>
+        prev.map(m => m.id === coachMsgId ? { ...m, text: fullText, isStreaming: false } : m)
+      );
+    } catch {
+      const answer = getFallbackAnswer(question, exercise.name);
+      setChatMessages(prev =>
+        prev.map(m => m.id === coachMsgId ? { ...m, text: answer, isStreaming: false } : m)
+      );
+    } finally {
+      setIsAskingCoach(false);
+    }
+  }, [exercise, isAskingCoach]);
 
   // Draw or render custom vector anatomical highlight
   const renderAnatomyDiagram = () => {
@@ -403,8 +531,8 @@ export const ExerciseDetail: React.FC<ExerciseDetailProps> = ({
             </div>
           </div>
 
-          {/* Tab switching options: GIF Demonstration / Anatomy Highlight */}
-          <div className="grid grid-cols-2 gap-1 bg-brand-dark p-1 rounded-xl border border-white/5">
+          {/* Tab switching: GIF / Anatomy / Coach IA */}
+          <div className="grid grid-cols-3 gap-1 bg-brand-dark p-1 rounded-xl border border-white/5">
             <button
               onClick={() => setActiveTab('video')}
               className={`py-1.5 text-xs font-display font-semibold rounded-lg transition-all ${
@@ -413,7 +541,7 @@ export const ExerciseDetail: React.FC<ExerciseDetailProps> = ({
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Animación GIF 📹
+              GIF 📹
             </button>
             <button
               onClick={() => setActiveTab('anatomy')}
@@ -423,12 +551,23 @@ export const ExerciseDetail: React.FC<ExerciseDetailProps> = ({
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Activación Muscular 🧬
+              Músculos 🧬
+            </button>
+            <button
+              onClick={() => setActiveTab('coach')}
+              className={`py-1.5 text-xs font-display font-semibold rounded-lg transition-all ${
+                activeTab === 'coach'
+                  ? 'bg-brand-gray text-brand-yellow border border-white/5'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              id="coach-ia-tab-btn"
+            >
+              Coach 🤖
             </button>
           </div>
 
           {/* Media Content Stage */}
-          {activeTab === 'video' ? (
+          {activeTab === 'video' && (
             <div className="relative w-full aspect-[4/3] bg-brand-dark rounded-xl overflow-hidden border border-white/5 flex items-center justify-center group shadow-inner">
               <img
                 src={`https://raw.githubusercontent.com/mohamedatef90/exercise-library/main/gifs/${exercise.gif}`}
@@ -437,8 +576,121 @@ export const ExerciseDetail: React.FC<ExerciseDetailProps> = ({
                 referrerPolicy="no-referrer"
               />
             </div>
-          ) : (
-            renderAnatomyDiagram()
+          )}
+          {activeTab === 'anatomy' && renderAnatomyDiagram()}
+
+          {/* ── COACH IA PANEL ─────────────────────────────────────────── */}
+          {activeTab === 'coach' && (
+            <div className="flex flex-col gap-3 animate-fade-in" id="coach-ia-panel">
+
+              {/* Header */}
+              <div className="flex items-center gap-2.5 bg-brand-yellow/5 border border-brand-yellow/15 rounded-2xl px-3.5 py-3">
+                <div className="w-8 h-8 rounded-xl bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center shrink-0">
+                  <Bot className="w-4 h-4 text-brand-yellow" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-brand-yellow font-bold uppercase tracking-wider">Coach IA · SmartFit</p>
+                  <p className="text-xs text-gray-300 leading-snug">
+                    Pregúntame cualquier duda sobre <span className="text-white font-semibold capitalize">{exercise.name}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick question chips — only when no conversation yet */}
+              {chatMessages.length === 0 && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider px-1">Preguntas frecuentes</p>
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_QUESTIONS.map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => handleAskCoach(q)}
+                        disabled={isAskingCoach}
+                        className="px-3 py-1.5 rounded-xl text-xs font-medium bg-brand-gray border border-white/8 text-gray-300 hover:border-brand-yellow/30 hover:text-brand-yellow transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Chat messages */}
+              {chatMessages.length > 0 && (
+                <div className="flex flex-col gap-3 max-h-56 overflow-y-auto pr-1" id="coach-chat-messages">
+                  {chatMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-2.5 ${
+                        msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-sm ${
+                        msg.role === 'coach'
+                          ? 'bg-brand-yellow/10 border border-brand-yellow/20'
+                          : 'bg-white/8 border border-white/10'
+                      }`}>
+                        {msg.role === 'coach' ? <Bot className="w-3.5 h-3.5 text-brand-yellow" /> : '👤'}
+                      </div>
+
+                      {/* Bubble */}
+                      <div className={`max-w-[78%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-brand-yellow/10 border border-brand-yellow/15 text-white rounded-tr-sm'
+                          : 'bg-brand-gray border border-white/5 text-gray-200 rounded-tl-sm'
+                      }`}>
+                        {msg.text || (
+                          <span className="flex gap-1 items-center text-gray-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-yellow/60 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-yellow/60 animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-yellow/60 animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </span>
+                        )}
+                        {msg.isStreaming && msg.text && (
+                          <span className="inline-block w-0.5 h-3 bg-brand-yellow ml-0.5 animate-pulse align-middle" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+              )}
+
+              {/* Input row */}
+              <div className="flex gap-2 items-center mt-1">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAskCoach(chatInput)}
+                  placeholder="Escribe tu pregunta al coach..."
+                  disabled={isAskingCoach}
+                  className="flex-1 bg-brand-gray border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white placeholder-gray-600 outline-none focus:border-brand-yellow/40 focus:ring-1 focus:ring-brand-yellow/20 transition-all disabled:opacity-50"
+                  id="coach-chat-input"
+                />
+                <button
+                  onClick={() => handleAskCoach(chatInput)}
+                  disabled={!chatInput.trim() || isAskingCoach}
+                  className="w-9 h-9 rounded-xl bg-brand-yellow flex items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-brand-yellow/20 shrink-0"
+                  id="coach-send-btn"
+                >
+                  <Send className="w-4 h-4 text-brand-dark" />
+                </button>
+              </div>
+
+              {/* Clear conversation */}
+              {chatMessages.length > 0 && (
+                <button
+                  onClick={() => setChatMessages([])}
+                  className="flex items-center justify-center gap-1.5 text-[10px] text-gray-600 hover:text-gray-400 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Nueva conversación
+                </button>
+              )}
+
+            </div>
           )}
 
           {/* Sets, Reps & Weight Tracking Panel (Modo Entrenamiento / Series Mode) */}

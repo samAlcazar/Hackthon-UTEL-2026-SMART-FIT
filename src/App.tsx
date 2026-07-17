@@ -21,7 +21,9 @@ import {
   Trophy,
   Users,
   Filter,
-  Play
+  Play,
+  Bot,
+  LogOut
 } from 'lucide-react';
 import { EXERCISES } from './data/exercises';
 import { LEAGUES } from './data/leagues';
@@ -32,8 +34,21 @@ import { ExerciseCard } from './components/ExerciseCard';
 import { ExerciseDetail } from './components/ExerciseDetail';
 import { LeagueDashboard } from './components/LeagueDashboard';
 import { WorkoutCelebration } from './components/WorkoutCelebration';
+import { AICoachTab } from './components/AICoachTab';
+import { LoginScreen, DemoUser } from './components/LoginScreen';
 
 export default function App() {
+  // --- Demo User & Login Session State ---
+  const [currentUser, setCurrentUser] = useState<DemoUser | null>(() => {
+    const saved = localStorage.getItem('smartfit_demo_session');
+    return saved ? JSON.parse(saved) as DemoUser : null;
+  });
+
+  const [aiCredits, setAiCredits] = useState<number>(() => {
+    const saved = localStorage.getItem('smartfit_ai_credits');
+    return saved ? parseInt(saved, 10) : 3;
+  });
+
   // --- Persistent State Hooks ---
   const [enabledExercises, setEnabledExercises] = useState<string[]>(() => {
     const saved = localStorage.getItem('smartfit_enabled_exercises');
@@ -97,7 +112,7 @@ export default function App() {
   const [activeEquipment, setActiveEquipment] = useState<'Todos' | 'Mancuernas' | 'Barra' | 'Peso Corporal' | 'Polea/Cable' | 'Bandas'>('Todos');
   const [isCustomizeMode, setIsCustomizeMode] = useState<boolean>(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-  const [activeTab, setActiveTab] = useState<'rutina' | 'ligas' | 'perfil'>('rutina');
+  const [activeTab, setActiveTab] = useState<'rutina' | 'coach' | 'ligas' | 'perfil'>('rutina');
   const [currentWorkoutIndex, setCurrentWorkoutIndex] = useState<number | 'celebration' | null>(null);
 
   // --- Custom Toast Feedback Notifications ---
@@ -132,12 +147,70 @@ export default function App() {
     localStorage.setItem('smartfit_weeks_tracked', weeksTracked.toString());
   }, [weeksTracked]);
 
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('smartfit_demo_session', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('smartfit_demo_session');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('smartfit_ai_credits', aiCredits.toString());
+  }, [aiCredits]);
+
   // Show customized floating toast alerts
   const showToast = (message: string, type: 'success' | 'info' | 'yellow' = 'success') => {
     setToast({ message, type });
     setTimeout(() => {
       setToast(null);
     }, 4500);
+  };
+
+  // --- User Selection & Credit Handlers ---
+  const handleSelectUser = (user: DemoUser) => {
+    setCurrentUser(user);
+    const newStats = {
+      streak: user.streak,
+      totalWorkouts: user.totalWorkouts,
+      lastWorkoutDate: user.lastWorkoutDate
+    };
+    setUserStats(newStats);
+    localStorage.setItem('smartfit_user_stats', JSON.stringify(newStats));
+
+    const newLeagueIndex = user.plan === 'black' ? 3 : 1;
+    setLeagueIndex(newLeagueIndex);
+    localStorage.setItem('smartfit_league_index', newLeagueIndex.toString());
+
+    const newAttendance = user.plan === 'black' ? 4 : 2;
+    setWeeklyAttendance(newAttendance);
+    localStorage.setItem('smartfit_weekly_attendance', newAttendance.toString());
+
+    const credits = user.plan === 'fit' ? 3 : 999;
+    setAiCredits(credits);
+    localStorage.setItem('smartfit_ai_credits', credits.toString());
+
+    localStorage.removeItem('smartfit_coach_general_chat');
+    showToast(`Sesión iniciada como ${user.name} (${user.plan === 'black' ? 'Plan Black 👑' : 'Plan Fit ⚡'})`, 'success');
+  };
+
+  const handleConsumeCredit = () => {
+    setAiCredits(prev => Math.max(0, prev - 1));
+  };
+
+  const handleUpgradeToBlack = () => {
+    if (!currentUser) return;
+    const updatedUser: DemoUser = { ...currentUser, plan: 'black' };
+    setCurrentUser(updatedUser);
+    setAiCredits(999);
+    setLeagueIndex(3);
+    showToast('¡Felicidades! Tu cuenta fue actualizada a Plan Black 👑 (Consultas Ilimitadas)', 'yellow');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('smartfit_demo_session');
+    showToast('Sesión cerrada. Selecciona un perfil de prueba.', 'info');
   };
 
   // --- On Mount Check-in and Persuasive Notification ---
@@ -388,6 +461,10 @@ export default function App() {
     (ex) => enabledExercises.includes(ex.id) && completedExercises.includes(ex.id)
   ).length;
 
+  if (!currentUser) {
+    return <LoginScreen onSelectUser={handleSelectUser} />;
+  }
+
   return (
     <div className="min-h-screen bg-neutral-950 font-sans text-neutral-100 flex flex-col items-center justify-center p-0 md:p-6 select-none relative overflow-x-hidden">
       {/* Decorative background gradients to feel premium & athletic */}
@@ -433,11 +510,17 @@ export default function App() {
                 <span className="font-display font-black text-sm tracking-tighter text-white uppercase italic">
                   IMPULSA <span className="text-brand-yellow">FIT</span>
                 </span>
-                <span className="bg-white/10 text-[8px] text-white font-bold px-1 py-0.5 rounded uppercase tracking-wide">
-                  Pro
+                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${
+                  currentUser.plan === 'black' 
+                    ? 'bg-brand-yellow text-brand-dark shadow-sm' 
+                    : 'bg-white/10 text-white'
+                }`}>
+                  {currentUser.plan === 'black' ? 'Black' : 'Fit'}
                 </span>
               </div>
-              <p className="text-[10px] text-gray-400 font-medium">Ejecución & Activación</p>
+              <p className="text-[10px] text-gray-400 font-medium truncate max-w-[120px]">
+                {currentUser.name}
+              </p>
             </div>
           </div>
 
@@ -645,6 +728,19 @@ export default function App() {
                 </div>
               )}
             </>
+          ) : activeTab === 'coach' ? (
+            <AICoachTab
+              userStats={userStats}
+              leagueIndex={leagueIndex}
+              weeklyAttendance={weeklyAttendance}
+              completedExercisesCount={completedRoutineCount}
+              totalExercisesCount={totalRoutineCount}
+              exercises={EXERCISES}
+              userPlan={currentUser.plan}
+              aiCredits={aiCredits}
+              onConsumeCredit={handleConsumeCredit}
+              onUpgradeToBlack={handleUpgradeToBlack}
+            />
           ) : activeTab === 'ligas' ? (
             <LeagueDashboard 
               leagueIndex={leagueIndex}
@@ -661,16 +757,41 @@ export default function App() {
             <div className="flex flex-col gap-4 py-2" id="profile-panel">
               {/* User overview */}
               <div className="bg-brand-gray border border-white/5 rounded-2xl p-5 text-center flex flex-col items-center gap-2">
-                <div className="w-16 h-16 rounded-full bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center text-brand-yellow mb-1 shadow-inner">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-1 shadow-inner ${
+                  currentUser.plan === 'black' 
+                    ? 'bg-brand-yellow/20 border-2 border-brand-yellow text-brand-yellow shadow-brand-yellow/20' 
+                    : 'bg-brand-yellow/10 border border-brand-yellow/20 text-brand-yellow'
+                }`}>
                   <User className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-base font-display font-bold text-white tracking-wide">Atleta Impulsa Fit</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Membresía Activa • Gold</p>
+                  <h3 className="text-base font-display font-bold text-white tracking-wide">{currentUser.name}</h3>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                      currentUser.plan === 'black'
+                        ? 'bg-brand-yellow text-brand-dark shadow-sm'
+                        : 'bg-white/10 text-white border border-white/10'
+                    }`}>
+                      {currentUser.plan === 'black' ? 'Plan Black 👑' : 'Plan Fit (Básico) ⚡'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {currentUser.plan === 'black' ? 'Consultas IA Ilimitadas · Acceso Total' : `Créditos IA hoy: ${aiCredits}/3 gratuitos`}
+                  </p>
                 </div>
-                <div className="w-full bg-white/5 h-[1px] my-2" />
+
+                <div className="w-full bg-white/5 h-[1px] my-1" />
                 
-                <div className="grid grid-cols-2 gap-4 w-full text-center">
+                {currentUser.plan === 'fit' && (
+                  <button
+                    onClick={handleUpgradeToBlack}
+                    className="w-full py-2.5 px-4 rounded-xl yellow-gradient text-brand-dark font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-brand-yellow/15 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer mb-1"
+                  >
+                    ⭐ Mejorar a Plan Black (Simular)
+                  </button>
+                )}
+                
+                <div className="grid grid-cols-2 gap-4 w-full text-center mt-1">
                   <div>
                     <span className="text-2xl font-display font-black text-brand-yellow">{userStats.streak}</span>
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5 font-bold">Racha de días</p>
@@ -681,6 +802,15 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Cerrar Sesión Button */}
+              <button
+                onClick={handleLogout}
+                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-3 px-4 rounded-xl text-xs font-display font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Cerrar Sesión (Cambiar de Usuario)</span>
+              </button>
 
               {/* Impulsa Fit Philosophy & Guidelines */}
               <div className="bg-brand-gray border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
@@ -707,12 +837,18 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Maintenance Tools */}
+              {/* Maintenance & Demo Switcher Tools */}
               <div className="bg-brand-gray border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
-                <h4 className="text-xs font-display font-bold text-white uppercase tracking-wider">Herramientas de Desarrollador</h4>
+                <h4 className="text-xs font-display font-bold text-white uppercase tracking-wider">Demostración & Ajustes</h4>
+                <button
+                  onClick={handleLogout}
+                  className="w-full bg-brand-yellow/10 hover:bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30 py-2.5 px-4 rounded-xl text-xs font-display font-bold transition-all cursor-pointer"
+                >
+                  Cambiar de Perfil (Carlos ↔ Valeria)
+                </button>
                 <button
                   onClick={handleResetProgress}
-                  className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-2.5 px-4 rounded-xl text-xs font-display font-bold transition-all"
+                  className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-2.5 px-4 rounded-xl text-xs font-display font-bold transition-all cursor-pointer"
                 >
                   Reiniciar Historial de Racha y Asistencias
                 </button>
@@ -736,6 +872,20 @@ export default function App() {
           >
             <Home className="w-5 h-5" />
             <span className="text-[9px] font-display font-bold uppercase tracking-wider">Mi Rutina</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('coach');
+              setIsCustomizeMode(false);
+            }}
+            className={`flex flex-col items-center gap-1 transition-all ${
+              activeTab === 'coach' ? 'text-brand-yellow scale-105' : 'text-gray-500 hover:text-gray-300'
+            }`}
+            aria-label="Ir al Coach IA"
+          >
+            <Bot className="w-5 h-5" />
+            <span className="text-[9px] font-display font-bold uppercase tracking-wider">Coach IA</span>
           </button>
 
           <button
