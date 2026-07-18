@@ -23,7 +23,8 @@ import {
   Filter,
   Play,
   Bot,
-  LogOut
+  LogOut,
+  ArrowRight
 } from 'lucide-react';
 import { EXERCISES } from './data/exercises';
 import { LEAGUES } from './data/leagues';
@@ -48,6 +49,12 @@ export default function App() {
     const saved = localStorage.getItem('smartfit_ai_credits');
     return saved ? parseInt(saved, 10) : 3;
   });
+
+  const [aiNotification, setAiNotification] = useState<{
+    title: string;
+    message: string;
+    type: 'reactivation' | 'building' | 'consistency';
+  } | null>(null);
 
   // --- Persistent State Hooks ---
   const [enabledExercises, setEnabledExercises] = useState<string[]>(() => {
@@ -166,6 +173,42 @@ export default function App() {
       setToast(null);
     }, 4500);
   };
+
+  // --- Habits-Based AI Push Notification Dispatcher ---
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    // Slight delay of 2.2 seconds to simulate push notification dropping down
+    const timer = setTimeout(() => {
+      const daysAgo = currentUser.lastWorkoutDate 
+        ? Math.floor((Date.now() - new Date(currentUser.lastWorkoutDate + 'T00:00:00').getTime()) / 86400000)
+        : 30;
+      
+      const firstName = currentUser.name.split(' ')[0];
+      
+      if (daysAgo >= 14) {
+        setAiNotification({
+          title: '⚠️ Alerta de Hábito · Coach IA',
+          message: `¡Te extrañamos, ${firstName}! Tu última sesión fue hace ${daysAgo} días. Tu cuerpo recuerda el progreso, volver es el paso más valiente. ¿Qué tal si hoy haces una sesión express de 15 minutos?`,
+          type: 'reactivation'
+        });
+      } else if (currentUser.streak >= 4) {
+        setAiNotification({
+          title: '🔥 Racha Imparable · Coach IA',
+          message: `¡Estás encendido, ${firstName}! Llevas ${currentUser.streak} días seguidos entrenando. Tu consistencia te tiene a las puertas de la gloria. ¡Haz que hoy cuente!`,
+          type: 'consistency'
+        });
+      } else {
+        setAiNotification({
+          title: '🌱 Construyendo Hábito · Coach IA',
+          message: `¡Excelente ritmo, ${firstName}! Llevas ${currentUser.streak} días consecutivos de racha. Completar el entrenamiento de hoy consolidará tu hábito semanal.`,
+          type: 'building'
+        });
+      }
+    }, 2200);
+
+    return () => clearTimeout(timer);
+  }, [currentUser?.name, currentUser?.plan, currentUser?.streak]);
 
   // --- User Selection & Credit Handlers ---
   const handleSelectUser = (user: DemoUser) => {
@@ -495,6 +538,71 @@ export default function App() {
             }`}>
               <CheckCircle className="w-4 h-4 shrink-0" />
               <span>{toast.message}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Simulated AI Push Notification Banner */}
+        {aiNotification && (
+          <div className="absolute top-7 inset-x-3 z-50 animate-fade-in" id="ai-push-notification">
+            <div className={`p-3.5 rounded-2xl shadow-2xl border backdrop-blur-lg flex flex-col gap-1.5 transition-all ${
+              aiNotification.type === 'reactivation'
+                ? 'bg-red-950/90 border-red-500/25 text-red-100'
+                : aiNotification.type === 'consistency'
+                  ? 'bg-amber-950/90 border-brand-yellow/30 text-amber-100'
+                  : 'bg-emerald-950/90 border-emerald-500/25 text-emerald-100'
+            }`}>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs shrink-0 ${
+                    aiNotification.type === 'reactivation'
+                      ? 'bg-red-500/10 text-red-400'
+                      : aiNotification.type === 'consistency'
+                        ? 'bg-brand-yellow/10 text-brand-yellow'
+                        : 'bg-emerald-500/10 text-emerald-400'
+                  }`}>
+                    <Bot className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider font-display">
+                    {aiNotification.title}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setAiNotification(null)}
+                  className="text-gray-400 hover:text-white text-xs cursor-pointer px-1.5 py-0.5 rounded-lg hover:bg-white/5"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-[11px] leading-relaxed font-medium">
+                {aiNotification.message}
+              </p>
+              
+              {/* Call-to-action button */}
+              <div className="flex justify-end gap-2 pt-1 border-t border-white/5">
+                <button
+                  onClick={() => setAiNotification(null)}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider transition-colors cursor-pointer text-gray-400 hover:text-white"
+                >
+                  Ignorar
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('coach');
+                    setAiNotification(null);
+                  }}
+                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-0.5 cursor-pointer hover:scale-[1.03] active:scale-95 shadow-md ${
+                    aiNotification.type === 'reactivation'
+                      ? 'bg-red-500 text-white shadow-red-500/15'
+                      : aiNotification.type === 'consistency'
+                        ? 'bg-brand-yellow text-brand-dark shadow-brand-yellow/15'
+                        : 'bg-emerald-500 text-white shadow-emerald-500/15'
+                  }`}
+                >
+                  <span>Chatear con Coach</span>
+                  <ArrowRight className="w-2.5 h-2.5" />
+                </button>
+              </div>
             </div>
           </div>
         )}

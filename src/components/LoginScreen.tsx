@@ -19,13 +19,13 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onSelectUser }) => {
-  const handleSelect = (name: string, plan: 'fit' | 'black', streak: number, totalWorkouts: number) => {
+  const handleSelect = (name: string, plan: 'fit' | 'black', streak: number, totalWorkouts: number, daysAgo: number = 1) => {
     onSelectUser({
       name,
       plan,
       streak,
       totalWorkouts,
-      lastWorkoutDate: new Date(Date.now() - 86400000).toISOString().split('T')[0] // ayer
+      lastWorkoutDate: new Date(Date.now() - (daysAgo * 86400000)).toISOString().split('T')[0]
     });
   };
 
@@ -132,6 +132,44 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSelectUser }) => {
 
             <div className="w-full flex items-center justify-end text-[10px] text-brand-yellow font-bold uppercase tracking-wider gap-1 pt-1 relative z-10">
               Probar Plan Black <ArrowRight className="w-3 h-3" />
+            </div>
+          </button>
+
+          {/* USER 3: PLAN FIT (CHURN RISK / DESERTER) */}
+          <button
+            onClick={() => handleSelect('Miguel Torres', 'fit', 0, 2, 21)}
+            className="w-full bg-brand-gray/60 border border-red-500/10 hover:border-red-500/30 rounded-3xl p-5 text-left transition-all hover:scale-[1.01] active:scale-95 group cursor-pointer flex flex-col gap-3 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="flex justify-between items-center w-full relative z-10">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-display font-black text-white uppercase tracking-wider">Miguel Torres</h3>
+                  <span className="text-[10px] text-red-400 font-bold">Plan Fit (Inactivo)</span>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 uppercase">
+                Riesgo de Abandono
+              </span>
+            </div>
+
+            <div className="space-y-1 text-[11px] text-gray-400 relative z-10">
+              <div className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-red-450 shrink-0" />
+                <span>Último entrenamiento: hace 21 días</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-brand-yellow shrink-0" />
+                <span>Recibirá alertas personalizadas de reactivación</span>
+              </div>
+            </div>
+
+            <div className="w-full flex items-center justify-end text-[10px] text-brand-yellow font-bold uppercase tracking-wider gap-1 pt-1 opacity-60 group-hover:opacity-100 transition-opacity relative z-10">
+              Probar Plan Inactivo <ArrowRight className="w-3 h-3" />
             </div>
           </button>
         </div>

@@ -48,15 +48,17 @@ function getFallbackAnswer(question: string, exerciseName: string): string {
   return FALLBACK_ANSWERS.default;
 }
 
-// ── Quick question suggestions ───────────────────────────────────────────────
+// ── Quick question suggestions (exercise-specific) ──────────────────────────
 
-const QUICK_QUESTIONS = [
-  '¿Cómo sé si lo estoy haciendo bien?',
-  '¿Qué músculo debo sentir activarse?',
-  '¿Cuánto descanso entre series?',
-  '¿Cómo elijo el peso correcto?',
-  '¿Hay alguna alternativa si me duele?',
-];
+function getExerciseQuickQuestions(exerciseName: string): string[] {
+  return [
+    `¿Cómo sé si estoy haciendo bien ${exerciseName}?`,
+    `¿Qué músculo debo sentir al hacer ${exerciseName}?`,
+    '¿Cuánto descanso entre series de este ejercicio?',
+    '¿Cómo elijo el peso correcto para este ejercicio?',
+    '¿Hay alternativa si me duele al hacerlo?',
+  ];
+}
 
 export interface SetItem {
   setNumber: number;
@@ -589,9 +591,9 @@ Reglas de respuesta:
                   <Bot className="w-4 h-4 text-brand-yellow" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-brand-yellow font-bold uppercase tracking-wider">Coach IA · SmartFit</p>
+                  <p className="text-[10px] text-brand-yellow font-bold uppercase tracking-wider">Coach de Ejercicio · IA</p>
                   <p className="text-xs text-gray-300 leading-snug">
-                    Pregúntame cualquier duda sobre <span className="text-white font-semibold capitalize">{exercise.name}</span>
+                    Solo respondo dudas sobre <span className="text-white font-semibold capitalize">{exercise.name}</span>
                   </p>
                 </div>
               </div>
@@ -599,9 +601,9 @@ Reglas de respuesta:
               {/* Quick question chips — only when no conversation yet */}
               {chatMessages.length === 0 && (
                 <div className="flex flex-col gap-2">
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider px-1">Preguntas frecuentes</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider px-1">Preguntas sobre {exercise.name}</p>
                   <div className="flex flex-wrap gap-2">
-                    {QUICK_QUESTIONS.map((q) => (
+                    {getExerciseQuickQuestions(exercise.name).map((q) => (
                       <button
                         key={q}
                         onClick={() => handleAskCoach(q)}
@@ -664,7 +666,7 @@ Reglas de respuesta:
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAskCoach(chatInput)}
-                  placeholder="Escribe tu pregunta al coach..."
+                  placeholder={`Duda sobre ${exercise.name}...`}
                   disabled={isAskingCoach}
                   className="flex-1 bg-brand-gray border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white placeholder-gray-600 outline-none focus:border-brand-yellow/40 focus:ring-1 focus:ring-brand-yellow/20 transition-all disabled:opacity-50"
                   id="coach-chat-input"
