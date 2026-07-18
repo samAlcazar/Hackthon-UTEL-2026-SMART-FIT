@@ -10,7 +10,7 @@
 ---
 
 ## 🎯 El Problema: El Abandono del Gimnasio
-El **60% de los nuevos usuarios** abandona el gimnasio durante sus primeros 3 meses. Las razones principales no son la falta de equipo, sino:
+El **50% de los nuevos usuarios** abandona el gimnasio durante sus primeros 3 meses. Las razones principales no son la falta de equipo, sino:
 1. **Falta de orientación técnica**: Los coaches del gimnasio no pueden atender a todos simultáneamente.
 2. **Incertidumbre en la rutina**: Los principiantes no saben qué ejercicio hacer ni qué músculo deben sentir.
 3. **Pérdida de motivación**: Ausencia de seguimiento diario y creación de hábitos sostenibles.
